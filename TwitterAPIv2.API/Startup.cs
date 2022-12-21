@@ -6,6 +6,7 @@ using TwitterAPIv2.API.StartupExtensions;
 using TwitterAPIv2.Application.Handlers;
 using TwitterAPIv2.Application.Queries;
 using TwitterAPIv2.Infrastructure.Services;
+using TwitterAPIv2.Infrastructure.Utilities;
 
 namespace TwitterAPIv2.API
 {
@@ -65,6 +66,7 @@ namespace TwitterAPIv2.API
 
             services.AddScoped<ITwitterService, TwitterService>();
             services.AddScoped<ITwitterAuthApi, TwitterAuthApi>();
+            services.AddScoped<ICalculateMetrics, CalculateMetrics>();
 
             services.AddTwitterApi(Configuration);
             services.AddSingleton(ExtractTwitterApiConfiguration());

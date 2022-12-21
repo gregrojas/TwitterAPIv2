@@ -4,14 +4,17 @@ using Microsoft.Extensions.Options;
 using Moq;
 using Moq.Protected;
 using Newtonsoft.Json;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Net;
 using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 using TwitterAPIv2.Infrastructure.Responses;
 using TwitterAPIv2.Infrastructure.Services;
+using TwitterAPIv2.Infrastructure.Utilities;
 using TwitterAPIv2.UnitTests.Helpers;
 using Xunit;
 
@@ -23,6 +26,7 @@ namespace TwitterAPIv2.UnitTests.Application.Services
         private readonly Mock<ITwitterAuthApi> _twitterAuthApi;
         private readonly Mock<HttpMessageHandler> _httpMessageHandler;
         private readonly IMapper _mapper;
+        private readonly Mock<ICalculateMetrics> _calculateMetrics;
         private readonly Mock<ILogger<TwitterService>> _mockLogger;
         private readonly IReadOnlyCollection<TweetStreamResponse> _tweets;
 
@@ -32,20 +36,39 @@ namespace TwitterAPIv2.UnitTests.Application.Services
             _mapper = AutoMapperHelper.Mapper;
             _mockLogger = new Mock<ILogger<TwitterService>>();
             _twitterAuthApi = new Mock<ITwitterAuthApi>();
+            _calculateMetrics = new Mock<ICalculateMetrics>();
             _tweets = new ReadOnlyCollection<TweetStreamResponse>(new List<TweetStreamResponse>()
             {
                 new TweetStreamResponse()
                 {
                     history_id = { }, id = "1602884697331093501", 
-                    text = "tweet1", 
-                    //entities = { }, 
+                    text = "tweet1",
+                    entities = new List<Entities>()
+                               {
+                                    new Entities
+                                    {
+                                        hashtags = new List<Hashtags>
+                                        {
+                                            new Hashtags() { tag = "test1" }
+                                        }
+                                    }
+                                },
                     public_metrics = { }
                 },
                 new TweetStreamResponse()
                 {
                     history_id = { }, id = "1602884697331093502", 
                     text = "tweet2", 
-                    //entities = { }, 
+                    entities = new List<Entities>()
+                               {
+                                    new Entities
+                                    {
+                                        hashtags = new List<Hashtags>
+                                        {
+                                            new Hashtags() { tag = "test2" } 
+                                        }
+                                    }
+                                }, 
                     public_metrics = { }
                 },
             });
@@ -66,7 +89,7 @@ namespace TwitterAPIv2.UnitTests.Application.Services
                 .Setup(a => a.FetchToken(It.IsAny<string>(), It.IsAny<string>())).Returns("some_token");
 
             var httpClient = new HttpClient(_httpMessageHandler.Object);
-            _twitterService = new TwitterService(httpClient, settings, _twitterAuthApi.Object, _mockLogger.Object);
+            _twitterService = new TwitterService(httpClient, settings, _twitterAuthApi.Object, _calculateMetrics.Object, _mockLogger.Object);
         }
 
         [Fact]
@@ -79,13 +102,13 @@ namespace TwitterAPIv2.UnitTests.Application.Services
                 .Protected()
                 .Setup<Task<HttpResponseMessage>>(
                     "SendAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
+                    ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get),
                     ItExpr.IsAny<CancellationToken>())
                 .ReturnsAsync(new HttpResponseMessage
-                {
-                    StatusCode = HttpStatusCode.OK,
-                    Content = new StringContent(content)
-                });
+                 {
+                     StatusCode = HttpStatusCode.OK,
+                     Content = new StringContent(content)
+                 }); ;
 
             var response = await _twitterService.GetSampleTweets();
 
@@ -102,8 +125,8 @@ namespace TwitterAPIv2.UnitTests.Application.Services
             _httpMessageHandler
                 .Protected()
                 .Setup<Task<HttpResponseMessage>>(
-                    "GetStreamAsync",
-                    ItExpr.IsAny<HttpRequestMessage>(),
+                    "SendAsync",
+                    ItExpr.Is<HttpRequestMessage>(req => req.Method == HttpMethod.Get),
                     ItExpr.IsAny<CancellationToken>())
                 .ReturnsAsync(new HttpResponseMessage
                 {
